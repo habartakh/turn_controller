@@ -7,6 +7,9 @@
 #include "rclcpp/logging.hpp"
 #include "rclcpp/rclcpp.hpp"
 
+#include "tf2/LinearMath/Matrix3x3.h"
+#include "tf2/LinearMath/Quaternion.h"
+
 using std::placeholders::_1;
 using namespace std::chrono_literals;
 
@@ -20,7 +23,7 @@ public:
     options1.callback_group = odom_callback_group_;
 
     odom_sub = this->create_subscription<nav_msgs::msg::Odometry>(
-        "/rosbot_xl_base_controller/odom", 10,
+        "/odometry/filtered", 10,
         std::bind(&TurnController::odom_callback, this, _1), options1);
 
     timer_callback_group_ = this->create_callback_group(
@@ -36,7 +39,22 @@ public:
 
 private:
   void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
-    // Compute distance travelled in X and Y axis
+    // Compute robot yaw
+    tf2::Quaternion q(
+        msg->pose.pose.orientation.x, msg->pose.pose.orientation.y,
+        msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
+
+    tf2::Matrix3x3 m(q);
+    double roll, pitch;
+    m.getRPY(roll, pitch, current_yaw); // yaw is in radians
+    RCLCPP_INFO(this->get_logger(),
+                "Received Odometry - current_yaw: %f radians", current_yaw);
+
+    dphi += current_yaw - old_yaw;
+    old_yaw = current_yaw;
+
+    RCLCPP_INFO(this->get_logger(), "Received Odometry - dphi: %f radians",
+                dphi);
   }
 
   // Move the robot according to the desired trajectory
@@ -62,9 +80,9 @@ private:
   // Parameters used to compute the distance travelled
   double old_yaw = 0.0;
   double current_yaw = 0.0;
-  double dphi = 0.0; // yaw between two odom messages
+  double dphi = 0.0; // yaw difference between two waypoints
 
-  double turned_angle = 0.0; // how much the yaw increased
+  // double yaw_difference = 0.0; // how much the yaw changed
 
   // Parameters to move the robot
   geometry_msgs::msg::Twist twist_cmd;
