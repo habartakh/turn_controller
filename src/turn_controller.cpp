@@ -13,6 +13,15 @@
 using std::placeholders::_1;
 using namespace std::chrono_literals;
 
+struct WayPoint {
+  double dx;   // change in the x-coordinate of the robot's position
+  double dy;   // change in the y-coordinate of the robot's position
+  double dphi; // change in the orientation angle of the robot
+
+  WayPoint(double a = 0.0, double b = 0.0, double c = 0.0)
+      : dx(a), dy(b), dphi(c) {}
+};
+
 class TurnController : public rclcpp::Node {
 public:
   TurnController() : Node("turn_controller") {
@@ -57,6 +66,22 @@ private:
                 dphi);
   }
 
+  // Add all the waypoints the robot is going throughout the trajectory
+  void waypoints_traj_init() {
+
+    waypoints_traj.push_back(WayPoint(0.000, 0.000, -0.844)); // yaw = -0.843998
+    waypoints_traj.push_back(WayPoint(0.000, 0.000, +0.582)); // yaw = -0.262086
+    waypoints_traj.push_back(WayPoint(0.000, 0.000, +0.329)); // yaw = -0.590681
+
+/***************For test purposes ***********************/
+    // waypoints_traj.push_back(
+    //     WayPoint(0.000, 0.000, +1.57)); // For test purposes 90°
+    // waypoints_traj.push_back(
+    //     WayPoint(0.000, 0.000, -1.57)); // For test purposes 0°
+    // waypoints_traj.push_back(
+    //     WayPoint(0.000, 0.000, -1.57)); // For test purposes -90°
+  }
+
   // Move the robot according to the desired trajectory
   void control_loop() {}
 
@@ -82,7 +107,9 @@ private:
   double current_yaw = 0.0;
   double dphi = 0.0; // yaw difference between two waypoints
 
-  // double yaw_difference = 0.0; // how much the yaw changed
+  // Waypoints the robot is passing by
+  std::vector<WayPoint> waypoints_traj;
+  long unsigned int traj_index = 0;
 
   // Parameters to move the robot
   geometry_msgs::msg::Twist twist_cmd;
