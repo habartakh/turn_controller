@@ -24,4 +24,12 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+add_executable(turn_controller src/turn_controller.cpp)
+ament_target_dependencies(turn_controller rclcpp tf2 geometry_msgs nav_msgs)
+
+install(TARGETS
+  turn_controller
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()
