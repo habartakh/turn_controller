@@ -43,6 +43,9 @@ public:
         100ms, std::bind(&TurnController::control_loop, this),
         timer_callback_group_);
 
+    // Setup the waypoints the robot passes through
+    waypoints_traj_init();
+
     RCLCPP_INFO(this->get_logger(), "Initialized distance controller node");
   }
 
@@ -55,41 +58,102 @@ private:
 
     tf2::Matrix3x3 m(q);
     double roll, pitch;
-    m.getRPY(roll, pitch, current_yaw); // yaw is in radians
-    RCLCPP_INFO(this->get_logger(),
-                "Received Odometry - current_yaw: %f radians", current_yaw);
+    m.getRPY(roll, pitch, current_yaw);
+    // RCLCPP_INFO(this->get_logger(),
+    //             "Received Odometry - current_yaw: %f radians", current_yaw);
 
     dphi += current_yaw - old_yaw;
     old_yaw = current_yaw;
 
-    RCLCPP_INFO(this->get_logger(), "Received Odometry - dphi: %f radians",
-                dphi);
+    // RCLCPP_INFO(this->get_logger(), "Received Odometry - dphi: %f radians",
+    //             dphi);
   }
 
   // Add all the waypoints the robot is going throughout the trajectory
   void waypoints_traj_init() {
 
-    waypoints_traj.push_back(WayPoint(0.000, 0.000, -0.844)); // yaw = -0.843998
-    waypoints_traj.push_back(WayPoint(0.000, 0.000, +0.582)); // yaw = -0.262086
-    waypoints_traj.push_back(WayPoint(0.000, 0.000, +0.329)); // yaw = -0.590681
+    // waypoints_traj.push_back(WayPoint(0.000, 0.000, -0.844)); // yaw =
+    // -0.843998 waypoints_traj.push_back(WayPoint(0.000, 0.000, +0.582)); //
+    // yaw = -0.262086 waypoints_traj.push_back(WayPoint(0.000, 0.000, +0.329));
+    // // yaw = -0.590681
 
-/***************For test purposes ***********************/
-    // waypoints_traj.push_back(
-    //     WayPoint(0.000, 0.000, +1.57)); // For test purposes 90°
-    // waypoints_traj.push_back(
-    //     WayPoint(0.000, 0.000, -1.57)); // For test purposes 0°
-    // waypoints_traj.push_back(
-    //     WayPoint(0.000, 0.000, -1.57)); // For test purposes -90°
+    /*************** For test purposes ***********************/
+    waypoints_traj.push_back(
+        WayPoint(0.000, 0.000, +1.5708)); // For test purposes 90°
+    waypoints_traj.push_back(
+        WayPoint(0.000, 0.000, -1.5708)); // For test purposes 0°
+    waypoints_traj.push_back(
+        WayPoint(0.000, 0.000, -1.5708)); // For test purposes -90°
   }
 
-  // Move the robot according to the desired trajectory
-  void control_loop() {}
+  // Rotate the robot according to the desired yaw
+  void control_loop() {
+
+    RCLCPP_INFO(this->get_logger(), "dphi : %f", dphi);
+
+    if (traj_index >= waypoints_traj.size()) {
+      stop_robot();
+      RCLCPP_INFO_ONCE(this->get_logger(), "Completed the trajectory! ");
+      rclcpp::shutdown();
+    }
+
+    WayPoint target = waypoints_traj[traj_index];
+
+    // Compute the distance left to the target
+    double error_yaw = dphi - target.dphi;
+
+    // If the robot reached the target waypoint
+    if (std::abs(error_yaw) < 0.1) {
+      RCLCPP_INFO(this->get_logger(), "Reached waypoint number : %lu",
+                  traj_index + 1);
+
+      // Stop the robot for 20 * 0.1 = 2 seconds
+
+      stop_robot();
+
+      traj_index++; // Update the next motion index
+
+      // reset the yaw difference computed between the two waypoints
+      dphi = 0.0;
+      rclcpp::sleep_for(std::chrono::seconds(2));
+    }
+
+    // Calculate delta time
+    rclcpp::Time now = this->now();
+    double dt =
+        prev_time.nanoseconds() == 0 ? 0.05 : (now - prev_time).seconds();
+    prev_time = now;
+
+    // Integral terms
+    integral_yaw += error_yaw * dt;
+
+    // Derivative terms
+    double derivative_yaw = (error_yaw - prev_error_yaw) / dt;
+
+    // PID control law
+    double angular_speed =
+        kp * error_yaw + ki * integral_yaw + kd * derivative_yaw;
+
+    // Make sure the robot stays within max speed bounds
+    angular_speed =
+        std::clamp(angular_speed, -max_angular_speed, +max_angular_speed);
+
+    RCLCPP_INFO(this->get_logger(), "angular_speed = %f ", angular_speed);
+
+    twist_cmd.linear.x = 0.0;
+    twist_cmd.linear.y = 0.0;
+    twist_cmd.angular.z = angular_speed;
+
+    twist_pub->publish(twist_cmd);
+
+    prev_error_yaw = error_yaw;
+  }
 
   void stop_robot() {
     geometry_msgs::msg::Twist stop_msg;
-    twist_cmd.linear.x = 0.0;
-    twist_cmd.linear.y = 0.0;
-    twist_cmd.angular.z = 0.0;
+    stop_msg.linear.x = 0.0;
+    stop_msg.linear.y = 0.0;
+    stop_msg.angular.z = 0.0;
 
     twist_pub->publish(stop_msg);
   }
@@ -113,6 +177,16 @@ private:
 
   // Parameters to move the robot
   geometry_msgs::msg::Twist twist_cmd;
+
+  // PID Controller Parameters
+  double kp = 0.5;           // Proportional Gain
+  double ki = 0.0;           // Integral Gain
+  double kd = 0.0;           // Derivative Gain
+  double integral_yaw = 0.0; // Integral terms of the PID controller
+  rclcpp::Time prev_time;    // instant t-1
+  double prev_error_yaw = 0.0;
+  double max_angular_speed =
+      3.14; // source: https://husarion.com/manuals/rosbot-xl/
 };
 
 int main(int argc, char *argv[]) {
