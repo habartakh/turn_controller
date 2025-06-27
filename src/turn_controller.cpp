@@ -87,7 +87,7 @@ private:
       stop_robot();
       RCLCPP_INFO_ONCE(this->get_logger(), "Completed the trajectory! ");
       rclcpp::shutdown();
-      twist_timer->cancel();
+      return;
     }
 
     WayPoint target = waypoints_traj[traj_index];
@@ -101,7 +101,7 @@ private:
     // Compute the angle left to the target
     double error_yaw = target_yaw - current_yaw;
 
-    RCLCPP_INFO(this->get_logger(), "error_yaw : %f", error_yaw);
+    // RCLCPP_INFO(this->get_logger(), "error_yaw : %f", error_yaw);
 
     // If the robot reached the target waypoint
     if (std::abs(error_yaw) < 0.1) {
@@ -188,9 +188,9 @@ private:
   geometry_msgs::msg::Twist twist_cmd;
 
   // PID Controller Parameters
-  double kp = 0.5;           // Proportional Gain
+  double kp = 2.5;           // Proportional Gain
   double ki = 0.0;           // Integral Gain
-  double kd = 0.0;           // Derivative Gain
+  double kd = 0.5;           // Derivative Gain
   double integral_yaw = 0.0; // Integral terms of the PID controller
   rclcpp::Time prev_time;    // instant t-1
   double prev_error_yaw = 0.0;
