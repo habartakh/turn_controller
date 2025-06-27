@@ -62,59 +62,57 @@ private:
     // RCLCPP_INFO(this->get_logger(),
     //             "Received Odometry - current_yaw: %f radians", current_yaw);
 
-    dphi += current_yaw - old_yaw;
-    old_yaw = current_yaw;
-
-    // RCLCPP_INFO(this->get_logger(), "Received Odometry - dphi: %f radians",
-    //             dphi);
   }
 
   // Add all the waypoints the robot is going throughout the trajectory
   void waypoints_traj_init() {
 
-    // waypoints_traj.push_back(WayPoint(0.000, 0.000, -0.844)); // yaw =
-    // -0.843998 waypoints_traj.push_back(WayPoint(0.000, 0.000, +0.582)); //
-    // yaw = -0.262086 waypoints_traj.push_back(WayPoint(0.000, 0.000, +0.329));
-    // // yaw = -0.590681
+     waypoints_traj.push_back(WayPoint(+0.000, +0.000, -0.844)); // yaw = -0.843998 
+     waypoints_traj.push_back(WayPoint(+0.000, +0.000, +0.582)); // yaw = -0.262086 
+    waypoints_traj.push_back(WayPoint(+0.000, +0.000, +0.852)); // yaw = + 0.590681
 
     /*************** For test purposes ***********************/
-    waypoints_traj.push_back(
-        WayPoint(0.000, 0.000, +1.5708)); // For test purposes 90°
-    waypoints_traj.push_back(
-        WayPoint(0.000, 0.000, -1.5708)); // For test purposes 0°
-    waypoints_traj.push_back(
-        WayPoint(0.000, 0.000, -1.5708)); // For test purposes -90°
+    // waypoints_traj.push_back(
+    //     WayPoint(+0.000, +0.000, +1.5708)); // Reach angle 90°
+    // waypoints_traj.push_back(
+    //     WayPoint(+0.000, +0.000, -1.5708)); // Reach angle 0°
+    // waypoints_traj.push_back(
+    //     WayPoint(+0.000, +0.000, -1.5708)); // Reach angle -90°
   }
 
   // Rotate the robot according to the desired yaw
   void control_loop() {
 
-    RCLCPP_INFO(this->get_logger(), "dphi : %f", dphi);
-
     if (traj_index >= waypoints_traj.size()) {
       stop_robot();
       RCLCPP_INFO_ONCE(this->get_logger(), "Completed the trajectory! ");
       rclcpp::shutdown();
+      twist_timer->cancel();
     }
 
     WayPoint target = waypoints_traj[traj_index];
 
-    // Compute the distance left to the target
-    double error_yaw = dphi - target.dphi;
+    // Compute the target yaw ONLY ONCE per Waypoint
+    if (!set_target_yaw) {
+      // Compute the angle left to the target
+      target_yaw = normalize_angle(current_yaw + target.dphi);
+      set_target_yaw = true;
+    }
+    // Compute the angle left to the target
+    double error_yaw = target_yaw - current_yaw;
+
+    RCLCPP_INFO(this->get_logger(), "error_yaw : %f", error_yaw);
 
     // If the robot reached the target waypoint
     if (std::abs(error_yaw) < 0.1) {
       RCLCPP_INFO(this->get_logger(), "Reached waypoint number : %lu",
                   traj_index + 1);
 
-      // Stop the robot for 20 * 0.1 = 2 seconds
-
-      stop_robot();
-
       traj_index++; // Update the next motion index
-
-      // reset the yaw difference computed between the two waypoints
-      dphi = 0.0;
+      // reset the yaw error computed to reach the waypoint
+      prev_error_yaw = 0.0;
+      set_target_yaw = false; // Reset target yaw for next waypoint
+      stop_robot();           // Stop the robot for 20 * 0.1 = 2 seconds
       rclcpp::sleep_for(std::chrono::seconds(2));
     }
 
@@ -138,7 +136,7 @@ private:
     angular_speed =
         std::clamp(angular_speed, -max_angular_speed, +max_angular_speed);
 
-    RCLCPP_INFO(this->get_logger(), "angular_speed = %f ", angular_speed);
+   // RCLCPP_INFO(this->get_logger(), "angular_speed = %f ", angular_speed);
 
     twist_cmd.linear.x = 0.0;
     twist_cmd.linear.y = 0.0;
@@ -158,6 +156,19 @@ private:
     twist_pub->publish(stop_msg);
   }
 
+  // normalize angles to range [-pi, pi]
+  double normalize_angle(double angle) {
+
+   // RCLCPP_INFO(this->get_logger(), "Inside mormalize_angle function ");
+    while (angle > M_PI) {
+      angle -= 2 * M_PI;
+    }
+    while (angle < -M_PI) {
+      angle += 2 * M_PI;
+    }
+    return angle;
+  }
+
   // Variable declarations
   rclcpp::CallbackGroup::SharedPtr odom_callback_group_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub;
@@ -166,10 +177,8 @@ private:
   rclcpp::TimerBase::SharedPtr twist_timer;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr twist_pub;
 
-  // Parameters used to compute the distance travelled
-  double old_yaw = 0.0;
+  // Parameters used to compute the yaw
   double current_yaw = 0.0;
-  double dphi = 0.0; // yaw difference between two waypoints
 
   // Waypoints the robot is passing by
   std::vector<WayPoint> waypoints_traj;
@@ -185,8 +194,9 @@ private:
   double integral_yaw = 0.0; // Integral terms of the PID controller
   rclcpp::Time prev_time;    // instant t-1
   double prev_error_yaw = 0.0;
-  double max_angular_speed =
-      3.14; // source: https://husarion.com/manuals/rosbot-xl/
+  double target_yaw = 0.0;
+  bool set_target_yaw = false;
+  double max_angular_speed = 3.14; // source: https://husarion.com/manuals/rosbot-xl/
 };
 
 int main(int argc, char *argv[]) {
