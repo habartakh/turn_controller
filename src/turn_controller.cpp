@@ -24,7 +24,8 @@ struct WayPoint {
 
 class TurnController : public rclcpp::Node {
 public:
-  TurnController() : Node("turn_controller") {
+  TurnController(int scene_number)
+      : Node("turn_controller"), scene_number_(scene_number) {
 
     odom_callback_group_ = this->create_callback_group(
         rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -66,14 +67,35 @@ private:
   // Add all the waypoints the robot is going throughout the trajectory
   void waypoints_traj_init() {
 
-    waypoints_traj.push_back(
-        WayPoint(+0.000, +0.000, -0.844)); // yaw = -0.843998
-    waypoints_traj.push_back(
-        WayPoint(+0.000, +0.000, +0.582)); // yaw = -0.262086
-    waypoints_traj.push_back(
-        WayPoint(+0.000, +0.000, +0.852)); // yaw = + 0.590681
-    waypoints_traj.push_back(
-        WayPoint(+0.000, +0.000, -0.591)); // yaw = + 0.0000
+    switch (scene_number_) {
+    case 1: // Simulation
+      // Assign waypoints for Simulation
+      waypoints_traj.push_back(
+          WayPoint(+0.000, +0.000, -0.844)); // yaw = -0.843998
+      waypoints_traj.push_back(
+          WayPoint(+0.000, +0.000, +0.582)); // yaw = -0.262086
+      waypoints_traj.push_back(
+          WayPoint(+0.000, +0.000, +0.852)); // yaw = + 0.590681
+      waypoints_traj.push_back(
+          WayPoint(+0.000, +0.000, -0.591)); // yaw = + 0.0000
+      break;
+
+    case 2: // CyberWorld
+      // Assign waypoints for CyberWorld
+       waypoints_traj.push_back(
+          WayPoint(+0.000, +0.000, -0.844)); // yaw = -0.843998
+      waypoints_traj.push_back(
+          WayPoint(+0.000, +0.000, +0.582)); // yaw = -0.262086
+    //   waypoints_traj.push_back(
+    //       WayPoint(+0.000, +0.000, +0.852)); // yaw = + 0.590681
+    //   waypoints_traj.push_back(
+    //       WayPoint(+0.000, +0.000, -0.591)); // yaw = + 0.0000
+      break;
+
+    default:
+      RCLCPP_ERROR(this->get_logger(), "Invalid Scene Number: %d",
+                   scene_number_);
+    }
 
     /*************** For test purposes ***********************/
     // waypoints_traj.push_back(
@@ -202,13 +224,22 @@ private:
   bool set_target_yaw = false;
   double max_angular_speed =
       3.14; // source: https://husarion.com/manuals/rosbot-xl/
+
+  // Parameter to differenciate between Simulated and Real world scenarios
+  int scene_number_;
 };
 
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
 
+   // Check if a scene number argument is provided
+  int scene_number = 1; // Default scene number to simulation
+  if (argc > 1) {
+    scene_number = std::atoi(argv[1]);
+  }
+
   std::shared_ptr<TurnController> turn_controller =
-      std::make_shared<TurnController>();
+      std::make_shared<TurnController>(scene_number);
 
   rclcpp::executors::MultiThreadedExecutor executor;
   executor.add_node(turn_controller);
