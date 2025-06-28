@@ -61,15 +61,19 @@ private:
     m.getRPY(roll, pitch, current_yaw);
     // RCLCPP_INFO(this->get_logger(),
     //             "Received Odometry - current_yaw: %f radians", current_yaw);
-
   }
 
   // Add all the waypoints the robot is going throughout the trajectory
   void waypoints_traj_init() {
 
-     waypoints_traj.push_back(WayPoint(+0.000, +0.000, -0.844)); // yaw = -0.843998 
-     waypoints_traj.push_back(WayPoint(+0.000, +0.000, +0.582)); // yaw = -0.262086 
-    waypoints_traj.push_back(WayPoint(+0.000, +0.000, +0.852)); // yaw = + 0.590681
+    waypoints_traj.push_back(
+        WayPoint(+0.000, +0.000, -0.844)); // yaw = -0.843998
+    waypoints_traj.push_back(
+        WayPoint(+0.000, +0.000, +0.582)); // yaw = -0.262086
+    waypoints_traj.push_back(
+        WayPoint(+0.000, +0.000, +0.852)); // yaw = + 0.590681
+    waypoints_traj.push_back(
+        WayPoint(+0.000, +0.000, -0.591)); // yaw = + 0.0000
 
     /*************** For test purposes ***********************/
     // waypoints_traj.push_back(
@@ -136,7 +140,7 @@ private:
     angular_speed =
         std::clamp(angular_speed, -max_angular_speed, +max_angular_speed);
 
-   // RCLCPP_INFO(this->get_logger(), "angular_speed = %f ", angular_speed);
+    // RCLCPP_INFO(this->get_logger(), "angular_speed = %f ", angular_speed);
 
     twist_cmd.linear.x = 0.0;
     twist_cmd.linear.y = 0.0;
@@ -159,7 +163,7 @@ private:
   // normalize angles to range [-pi, pi]
   double normalize_angle(double angle) {
 
-   // RCLCPP_INFO(this->get_logger(), "Inside mormalize_angle function ");
+    // RCLCPP_INFO(this->get_logger(), "Inside mormalize_angle function ");
     while (angle > M_PI) {
       angle -= 2 * M_PI;
     }
@@ -196,7 +200,8 @@ private:
   double prev_error_yaw = 0.0;
   double target_yaw = 0.0;
   bool set_target_yaw = false;
-  double max_angular_speed = 3.14; // source: https://husarion.com/manuals/rosbot-xl/
+  double max_angular_speed =
+      3.14; // source: https://husarion.com/manuals/rosbot-xl/
 };
 
 int main(int argc, char *argv[]) {
