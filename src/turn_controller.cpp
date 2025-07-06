@@ -61,7 +61,10 @@ private:
     double roll, pitch;
     m.getRPY(roll, pitch, current_yaw);
     // RCLCPP_INFO(this->get_logger(),
-    //             "Received Odometry - current_yaw: %f radians", current_yaw);
+    //           "Received Odometry - current_yaw: %f radians", current_yaw);
+
+    // To only move the robot when valid messages are received
+    odom_received = true;
   }
 
   // Add all the waypoints the robot is going throughout the trajectory
@@ -81,15 +84,14 @@ private:
       break;
 
     case 2: // CyberWorld
-      // Assign waypoints for CyberWorld
-       waypoints_traj.push_back(
-          WayPoint(+0.000, +0.000, -0.844)); // yaw = -0.843998
+            // Assign waypoints for CyberWorld 
       waypoints_traj.push_back(
-          WayPoint(+0.000, +0.000, +0.582)); // yaw = -0.262086
-    //   waypoints_traj.push_back(
-    //       WayPoint(+0.000, +0.000, +0.852)); // yaw = + 0.590681
-    //   waypoints_traj.push_back(
-    //       WayPoint(+0.000, +0.000, -0.591)); // yaw = + 0.0000
+          WayPoint(+0.000, +0.000, -0.495)); // yaw = -0.746
+      waypoints_traj.push_back(
+          WayPoint(+0.000, +0.000, -0.823)); // yaw = -1.469
+      waypoints_traj.push_back(
+          WayPoint(+0.000, +0.000, +1.168)); // yaw = -0.3514
+      max_angular_speed = 0.15;
       break;
 
     default:
@@ -116,6 +118,12 @@ private:
       return;
     }
 
+    if (!odom_received) {
+      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                           "Waiting for odometry...");
+      return;
+    }
+
     WayPoint target = waypoints_traj[traj_index];
 
     // Compute the target yaw ONLY ONCE per Waypoint
@@ -127,10 +135,10 @@ private:
     // Compute the angle left to the target
     double error_yaw = target_yaw - current_yaw;
 
-    // RCLCPP_INFO(this->get_logger(), "error_yaw : %f", error_yaw);
+    RCLCPP_INFO(this->get_logger(), "error_yaw : %f", error_yaw);
 
     // If the robot reached the target waypoint
-    if (std::abs(error_yaw) < 0.1) {
+    if (std::abs(error_yaw) < 0.2) {
       RCLCPP_INFO(this->get_logger(), "Reached waypoint number : %lu",
                   traj_index + 1);
 
@@ -162,7 +170,8 @@ private:
     angular_speed =
         std::clamp(angular_speed, -max_angular_speed, +max_angular_speed);
 
-    // RCLCPP_INFO(this->get_logger(), "angular_speed = %f ", angular_speed);
+    // RCLCPP_INFO(this->get_logger(), "angular_speed = %f ",
+    // angular_speed);
 
     twist_cmd.linear.x = 0.0;
     twist_cmd.linear.y = 0.0;
@@ -182,10 +191,9 @@ private:
     twist_pub->publish(stop_msg);
   }
 
-  // normalize angles to range [-pi, pi]
+  // normalize angles to range [-pi, pi] for real robot
   double normalize_angle(double angle) {
 
-    // RCLCPP_INFO(this->get_logger(), "Inside mormalize_angle function ");
     while (angle > M_PI) {
       angle -= 2 * M_PI;
     }
@@ -205,6 +213,7 @@ private:
 
   // Parameters used to compute the yaw
   double current_yaw = 0.0;
+  bool odom_received = false;
 
   // Waypoints the robot is passing by
   std::vector<WayPoint> waypoints_traj;
@@ -232,7 +241,7 @@ private:
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
 
-   // Check if a scene number argument is provided
+  // Check if a scene number argument is provided
   int scene_number = 1; // Default scene number to simulation
   if (argc > 1) {
     scene_number = std::atoi(argv[1]);
